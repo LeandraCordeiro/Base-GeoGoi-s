@@ -1,2 +1,2 @@
-# Base-GeoGoi-s
+# Base-GeoGoias
 Base Integrada de Dados Geocientíficos de Goiás
