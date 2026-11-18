@@ -141,6 +141,58 @@ if catalog is None:
 else:
     st.metric("Registros do catálogo de metadados", len(catalog))
     st.dataframe(catalog, hide_index=True, use_container_width=True)
+    
+# Gráficos do catálogo geocientífico
+st.subheader("Minerais e áreas estudadas")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if "substancia" in catalog.columns:
+        minerais = (
+            catalog["substancia"]
+            .fillna("")
+            .str.split(";")
+            .explode()
+            .str.strip()
+        )
+        minerais = minerais[minerais != ""]
+
+        if not minerais.empty:
+            contagem = minerais.value_counts().reset_index()
+            contagem.columns = ["Mineral", "Documentos"]
+
+            fig = px.bar(
+                contagem,
+                x="Mineral",
+                y="Documentos",
+                title="Minerais registrados nos estudos"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+with col2:
+    if "municipio" in catalog.columns:
+        areas = (
+            catalog["municipio"]
+            .fillna("")
+            .str.split(";")
+            .explode()
+            .str.strip()
+        )
+        areas = areas[areas != ""]
+
+        if not areas.empty:
+            contagem = areas.value_counts().reset_index()
+            contagem.columns = ["Área", "Documentos"]
+
+            fig = px.bar(
+                contagem,
+                x="Área",
+                y="Documentos",
+                title="Áreas estudadas"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
     if {"latitude", "longitude"}.issubset(catalog.columns):
         locations = catalog.copy()
         locations["latitude"] = pd.to_numeric(locations["latitude"], errors="coerce")
