@@ -55,6 +55,29 @@ def load_catalog():
     except (requests.RequestException, ValueError, UnicodeDecodeError):
         return None
 
+@st.cache_data(ttl=900, show_spinner=False)
+def load_repo_csv(rel_path):
+    raw_url = (
+        f"https://raw.githubusercontent.com/"
+        f"{OWNER}/{REPO}/{BRANCH}/{rel_path}"
+    )
+
+    try:
+        response = requests.get(raw_url, timeout=20)
+
+        if response.status_code == 404:
+            return None
+
+        response.raise_for_status()
+
+        return pd.read_csv(
+            StringIO(response.content.decode("utf-8-sig")),
+            dtype=str
+        ).fillna("")
+
+    except Exception:
+        return None
+
 try:
     tree = load_tree()
 except requests.RequestException as e:
