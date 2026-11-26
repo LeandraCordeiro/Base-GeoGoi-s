@@ -341,3 +341,130 @@ else:
 
 st.divider()
 st.caption("GeoGoiás · Registros de documentos não equivalem a depósitos, reservas, cobertura territorial ou produção mineral.")
+
+
+# ==========================================
+# MAPA INTERATIVO GEOGOIAS
+# ==========================================
+
+st.subheader("Mapa interativo de Goiás")
+
+areas_df = load_repo_csv(
+    "07_metadados/areas_estudadas.csv"
+)
+
+ocorr_df = load_repo_csv(
+    "07_metadados/ocorrencias_minerais.csv"
+)
+
+if areas_df is None and ocorr_df is None:
+    st.info(
+        "Adicione os arquivos areas_estudadas.csv e "
+        "ocorrencias_minerais.csv na pasta 07_metadados."
+    )
+
+else:
+    fig_mapa = go.Figure()
+
+    if areas_df is not None and not areas_df.empty:
+        areas_df["latitude"] = pd.to_numeric(
+            areas_df["latitude"], errors="coerce"
+        )
+        areas_df["longitude"] = pd.to_numeric(
+            areas_df["longitude"], errors="coerce"
+        )
+        areas_df["n_estudos"] = pd.to_numeric(
+            areas_df["n_estudos"], errors="coerce"
+        )
+
+        areas_validas = areas_df.dropna(
+            subset=["latitude", "longitude", "n_estudos"]
+        )
+
+        if not areas_validas.empty:
+            fig_mapa.add_trace(
+                go.Scattermapbox(
+                    lat=areas_validas["latitude"],
+                    lon=areas_validas["longitude"],
+                    mode="markers",
+                    name="Áreas estudadas",
+                    marker=dict(
+                        size=areas_validas["n_estudos"].clip(
+                            lower=1, upper=20
+                        ) * 2 + 8,
+                        color="#176A9D",
+                        opacity=0.75,
+                    ),
+                    text=areas_validas["municipio"],
+                    customdata=areas_validas[["n_estudos"]].values,
+                    hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "Estudos cadastrados: %{customdata[0]}"
+                        "<extra></extra>"
+                    ),
+                )
+            )
+
+    if ocorr_df is not None and not ocorr_df.empty:
+        ocorr_df["latitude"] = pd.to_numeric(
+            ocorr_df["latitude"], errors="coerce"
+        )
+        ocorr_df["longitude"] = pd.to_numeric(
+            ocorr_df["longitude"], errors="coerce"
+        )
+
+        ocorr_validas = ocorr_df.dropna(
+            subset=["latitude", "longitude"]
+        )
+
+        for mineral in ocorr_validas["substancia"].unique():
+            if not str(mineral).strip():
+                continue
+
+            dados = ocorr_validas[
+                ocorr_validas["substancia"] == mineral
+            ]
+
+            fig_mapa.add_trace(
+                go.Scattermapbox(
+                    lat=dados["latitude"],
+                    lon=dados["longitude"],
+                    mode="markers",
+                    name=str(mineral),
+                    marker=dict(size=11, opacity=0.85),
+                    text=dados["municipio"],
+                    hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        f"Mineral: {mineral}<extra></extra>"
+                    ),
+                )
+            )
+
+    fig_mapa.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=-15.8, lon=-49.3),
+            zoom=5.5,
+        ),
+        height=600,
+        margin=dict(l=0, r=0, t=10, b=0),
+        legend=dict(orientation="h"),
+    )
+
+    if fig_mapa.data:
+        st.plotly_chart(
+            fig_mapa,
+            use_container_width=True
+        )
+    else:
+        st.warning(
+            "Os arquivos foram encontrados, mas ainda não "
+            "contêm registros geográficos suficientes."
+        )
+
+    st.caption(
+        "Pontos exibidos conforme coordenadas cadastradas. "
+        "Coordenadas municipais aproximadas não representam "
+        "a localização exata de depósitos minerais."
+    )
+
