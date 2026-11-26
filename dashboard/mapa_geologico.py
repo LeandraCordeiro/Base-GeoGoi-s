@@ -109,7 +109,7 @@ def mostrar_mapa_geologico():
     if not camadas:
         st.warning("Nenhum SHP encontrado nas pastas de mapas da Base GeoGoiás.")
         return
-    predefinido = [p for p in camadas if "/geocronologia/" in p][:1]
+    predefinido = []  # carregar somente após seleção do usuário
     selecao = st.multiselect(
         "Selecione até três camadas do SGB",
         list(camadas),
