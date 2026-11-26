@@ -33,6 +33,17 @@ st.set_page_config(page_title="GeoGoiás | Inventário geocientífico", page_ico
 st.title("GeoGoiás | Inteligência Geocientífica")
 st.caption("Inventário dinâmico dos arquivos do repositório público · Fonte: GitHub · Sem dados ilustrativos")
 
+# Mapa vetorial SGB: exibido antes das análises pesadas de PDFs.
+st.divider()
+try:
+    from mapa_geologico import mostrar_mapa_geologico
+    mostrar_mapa_geologico()
+except Exception as erro_mapa_sgb:
+    st.error("A seção de mapas SGB não pôde ser carregada.")
+    st.exception(erro_mapa_sgb)
+
+
+
 @st.cache_data(ttl=900, show_spinner=False)
 def load_tree():
     url = f"{API}/git/trees/{BRANCH}?recursive=1"
@@ -468,7 +479,3 @@ else:
         "a localização exata de depósitos minerais."
     )
 
-from mapa_geologico import mostrar_mapa_geologico
-
-st.divider()
-mostrar_mapa_geologico()
