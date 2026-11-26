@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import requests
 import streamlit as st
 
