@@ -137,61 +137,37 @@ st.download_button("Baixar inventário filtrado (CSV)", filtered.to_csv(index=Fa
 st.subheader("Catálogo geocientífico enriquecido")
 catalog = load_catalog()
 if catalog is None:
-    st.info("O arquivo `07_metadados/catalogo_mestre.csv` ainda não foi encontrado. Quando ele for adicionado, os metadados detalhados aparecerão nesta seção.")
+    st.warning("O catálogo não foi carregado. Confira `07_metadados/catalogo_mestre.csv` no GitHub.")
 else:
+    catalog.columns = catalog.columns.str.strip()
     st.metric("Registros do catálogo de metadados", len(catalog))
     st.dataframe(catalog, hide_index=True, use_container_width=True)
-    
-# Gráficos do catálogo geocientífico
-st.subheader("Minerais e áreas estudadas")
 
-col1, col2 = st.columns(2)
+    st.subheader("Minerais e áreas estudadas")
+    st.caption("Os gráficos usam apenas campos preenchidos no catálogo. Menções extraídas automaticamente devem ser validadas antes de inclusão.")
 
-with col1:
-    if "substancia" in catalog.columns:
-        minerais = (
-            catalog["substancia"]
-            .fillna("")
-            .str.split(";")
-            .explode()
-            .str.strip()
-        )
-        minerais = minerais[minerais != ""]
+    def contagem_multivalor(coluna):
+        if coluna not in catalog.columns:
+            return pd.DataFrame(columns=["item", "documentos"])
+        series = catalog[coluna].fillna("").astype(str).str.split(";").explode().str.strip()
+        series = series[series.ne("") & ~series.str.lower().isin(["não informado", "nao informado", "pendente", "nd"])]
+        if series.empty:
+            return pd.DataFrame(columns=["item", "documentos"])
+        return series.value_counts().rename_axis("item").reset_index(name="documentos")
 
-        if not minerais.empty:
-            contagem = minerais.value_counts().reset_index()
-            contagem.columns = ["Mineral", "Documentos"]
-
-            fig = px.bar(
-                contagem,
-                x="Mineral",
-                y="Documentos",
-                title="Minerais registrados nos estudos"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-with col2:
-    if "municipio" in catalog.columns:
-        areas = (
-            catalog["municipio"]
-            .fillna("")
-            .str.split(";")
-            .explode()
-            .str.strip()
-        )
-        areas = areas[areas != ""]
-
-        if not areas.empty:
-            contagem = areas.value_counts().reset_index()
-            contagem.columns = ["Área", "Documentos"]
-
-            fig = px.bar(
-                contagem,
-                x="Área",
-                y="Documentos",
-                title="Áreas estudadas"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        minerais = contagem_multivalor("substancia")
+        if minerais.empty:
+            st.info("Sem minerais identificados no catálogo: preencha a coluna `substancia` após consultar os PDFs.")
+        else:
+            st.plotly_chart(px.bar(minerais, x="item", y="documentos", title="Documentos por mineral", labels={"item":"Mineral"}), use_container_width=True)
+    with col2:
+        areas = contagem_multivalor("municipio")
+        if areas.empty:
+            st.info("Sem áreas estudadas no catálogo: preencha a coluna `municipio` após consultar os PDFs.")
+        else:
+            st.plotly_chart(px.bar(areas, x="item", y="documentos", title="Documentos por município", labels={"item":"Município"}), use_container_width=True)
 
     if {"latitude", "longitude"}.issubset(catalog.columns):
         locations = catalog.copy()
@@ -205,4 +181,4 @@ with col2:
             st.caption("Somente coordenadas presentes no catálogo; não foram estimadas localizações.")
 
 st.divider()
-st.caption("GeoGoiás · Os indicadores mostram registros do repositório, não reservas, cobertura territorial ou produção mineral. Não usar contagens de arquivos como estimativas de oferta ou demanda.")
+st.caption("GeoGoiás · Registros de documentos não equivalem a depósitos, reservas, cobertura territorial ou produção mineral.")
