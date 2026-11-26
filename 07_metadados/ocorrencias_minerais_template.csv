@@ -1,0 +1,10 @@
+﻿id,substancia,municipio,latitude,longitude,tipo_ocorrencia,status,fonte
+OC-GO-001,Nióbio,Catalão,-18.1721,-47.9372,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-002,Fosfato,Catalão,-18.1721,-47.9372,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-003,Ouro,Crixás,-14.5414,-49.9692,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-004,Ouro,Mara Rosa,-14.0148,-49.1771,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-005,Níquel,Niquelândia,-14.4734,-48.4599,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-006,Níquel,Barro Alto,-14.9658,-48.9159,Depósito/ocorrência,Preliminar,Preencher fonte
+OC-GO-007,Terras raras,Minaçu,-13.5317,-48.22,Ocorrência/potencial,Preliminar,Preencher fonte
+OC-GO-008,Cobre,Alto Horizonte,-14.1953,-49.337,Ocorrência/potencial,Preliminar,Preencher fonte
+OC-GO-009,Ouro,Pilar de Goiás,-14.7607,-49.5781,Depósito/ocorrência,Preliminar,Preencher fonte
