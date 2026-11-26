@@ -383,7 +383,7 @@ else:
 
         if not areas_validas.empty:
             fig_mapa.add_trace(
-                go.Scattermapbox(
+                    go.Scattermap(
                     lat=areas_validas["latitude"],
                     lon=areas_validas["longitude"],
                     mode="markers",
@@ -426,7 +426,7 @@ else:
             ]
 
             fig_mapa.add_trace(
-                go.Scattermapbox(
+                go.Scattermap(
                     lat=dados["latitude"],
                     lon=dados["longitude"],
                     mode="markers",
