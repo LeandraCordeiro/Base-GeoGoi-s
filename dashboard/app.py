@@ -441,10 +441,10 @@ else:
             )
 
     fig_mapa.update_layout(
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=-15.8, lon=-49.3),
-            zoom=5.5,
+    map=dict(
+        style="open-street-map",
+        center=dict(lat=-15.8, lon=-49.3),
+        zoom=5.5,
         ),
         height=600,
         margin=dict(l=0, r=0, t=10, b=0),
