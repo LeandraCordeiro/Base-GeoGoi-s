@@ -468,3 +468,7 @@ else:
         "a localização exata de depósitos minerais."
     )
 
+from mapa_geologico import mostrar_mapa_geologico
+
+st.divider()
+mostrar_mapa_geologico()
