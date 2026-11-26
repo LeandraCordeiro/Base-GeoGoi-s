@@ -5,6 +5,7 @@ import json
 import lzma
 import shutil
 import zipfile
+import requests
 
 import folium
 import geopandas as gpd
@@ -103,6 +104,25 @@ def carregar_camada(caminho):
     return json.loads(gdf.to_json()), campos, total, no_envelope, len(gdf)
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def carregar_limite_goias():
+    """Malha da UF Goiás (código IBGE 52) na API oficial do IBGE."""
+    url = "https://servicodados.ibge.gov.br/api/v3/malhas/estados/52"
+    resposta = requests.get(
+        url,
+        params={"formato": "application/vnd.geo+json", "qualidade": "minima"},
+        headers={"Accept": "application/vnd.geo+json", "User-Agent": "GeoGoiasDashboard/1.0"},
+        timeout=20,
+    )
+    resposta.raise_for_status()
+    dados = resposta.json()
+    if dados.get("type") not in (
+        "FeatureCollection", "Feature", "Polygon", "MultiPolygon", "GeometryCollection"
+    ):
+        raise ValueError("A resposta do IBGE não contém uma geometria GeoJSON válida.")
+    return dados
+
+
 def mostrar_mapa_geologico():
     st.subheader("Mapas geocientíficos do SGB — Goiás")
     camadas = listar_camadas()
@@ -118,13 +138,32 @@ def mostrar_mapa_geologico():
         key="camadas_sgb",
     )
     if not selecao:
-        st.info("Selecione uma camada para visualizar o mapa.")
-        return
+        st.info("Exibindo o limite estadual. Selecione uma camada do SGB para sobrepor dados.")
 
+    # OpenStreetMap substitui o CARTO Positron, que passou a exigir chave API.
     mapa = folium.Map(
         location=[-15.8, -49.3], zoom_start=6,
-        tiles="CartoDB positron", control_scale=True
+        tiles="OpenStreetMap", control_scale=True
     )
+    try:
+        limite = carregar_limite_goias()
+        contorno = folium.GeoJson(
+            limite,
+            name="Limite estadual de Goiás — IBGE",
+            style_function=lambda feature: {
+                "color": "#B31E35", "weight": 3,
+                "fillColor": "#F4C95D", "fillOpacity": 0.025,
+                "dashArray": "7,4",
+            },
+            tooltip="Goiás — limite estadual (IBGE)",
+        )
+        contorno.add_to(mapa)
+        mapa.fit_bounds(contorno.get_bounds(), padding=(14, 14))
+    except Exception as erro_limite:
+        st.warning(
+            "O limite de Goiás não pôde ser consultado na API do IBGE "
+            f"nesta execução: {erro_limite}"
+        )
     resumo = []
     for i, caminho in enumerate(selecao):
         try:
@@ -156,18 +195,19 @@ def mostrar_mapa_geologico():
         except Exception as erro:
             st.error(f"Erro ao carregar {caminho}: {erro}")
 
+    folium.LayerControl(collapsed=False).add_to(mapa)
+    st_folium(
+        mapa, height=620, width=None,
+        returned_objects=[], key="mapa_sgb_geogoias"
+    )
     if resumo:
-        folium.LayerControl(collapsed=False).add_to(mapa)
-        st_folium(
-            mapa, height=620, width=None,
-            returned_objects=[], key="mapa_sgb_geogoias"
-        )
         st.dataframe(resumo, hide_index=True, use_container_width=True)
-        st.caption(
-            "Fonte: dados SGB/CPRM armazenados no GitHub GeoGoiás. "
-            "Exibição limitada a 1.200 feições por camada e ao envelope "
-            "aproximado de Goiás; sem recorte exato pelo limite estadual. "
-            "Cores de visualização, não simbologia geológica oficial."
-        )
     else:
-        st.warning("Nenhuma camada pôde ser exibida. Verifique os arquivos e os avisos acima.")
+        st.info("Nenhuma feição do SGB foi exibida; confira os arquivos e os avisos acima.")
+    st.caption(
+        "Limite estadual: IBGE (malhas geográficas, UF 52). "
+        "Camadas temáticas: SGB/CPRM armazenadas na Base GeoGoiás. "
+        "Máximo de 1.200 feições exibidas por camada; filtro geográfico "
+        "aproximado por envelope, sem recorte exato ao polígono estadual. "
+        "Cores ilustrativas, não simbologia geológica oficial."
+    )
