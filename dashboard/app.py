@@ -180,5 +180,140 @@ else:
             st.map(locations.rename(columns={"latitude": "lat", "longitude": "lon"})[["lat", "lon"]])
             st.caption("Somente coordenadas presentes no catálogo; não foram estimadas localizações.")
 
+
+# ===============================================================
+# Extração automática: menções verificáveis nos documentos PDF
+# ===============================================================
+import fitz  # PyMuPDF
+
+# Vocabulários iniciais editáveis. Novos termos podem ser incluídos.
+MINERAIS = {
+    "Nióbio": [r"\bnióbio\b", r"\bniobio\b"],
+    "Fosfato": [r"\bfosfat(?:o|os|ada|adas|ado|ados)\b", r"\bapatita\b"],
+    "Terras raras": [r"\bterras? raras?\b", r"\belementos? de terras? raras?\b", r"\bETR\b", r"\bREE\b"],
+    "Níquel": [r"\bníquel\b", r"\bniquel\b"],
+    "Ouro": [r"\bouros?\b", r"\baurífer[oa]s?\b", r"\baurifer[oa]s?\b"],
+    "Vermiculita": [r"\bvermiculitas?\b"],
+    "Cobre": [r"\bcobres?\b", r"\bcuprífer[oa]s?\b"],
+    "Cobalto": [r"\bcobaltos?\b"],
+    "Estanho": [r"\bestanhos?\b"],
+    "Lítio": [r"\blítio\b", r"\blitio\b"],
+    "Grafita": [r"\bgrafitas?\b", r"\bgrafites?\b"],
+}
+MUNICIPIOS = {
+    "Mara Rosa": [r"\bmara rosa\b"],
+    "Crixás": [r"\bcrixás\b", r"\bcrixas\b"],
+    "Catalão": [r"\bcatalão\b", r"\bcatalao\b"],
+    "Ouvidor": [r"\bouvidor\b"],
+    "Niquelândia": [r"\bniquelândia\b", r"\bniquelandia\b"],
+    "Barro Alto": [r"\bbarro alto\b"],
+    "Minaçu": [r"\bminaçu\b", r"\bminacu\b"],
+    "Pilar de Goiás": [r"\bpilar de goiás\b", r"\bpilar de goias\b"],
+    "Alto Horizonte": [r"\balto horizonte\b"],
+    "Alto Paraíso de Goiás": [r"\balto paraíso de goiás\b", r"\balto paraiso de goias\b"],
+    "Formosa": [r"\bformosa\b"],
+    "Goiânia": [r"\bgoiânia\b", r"\bgoiania\b"],
+    "Orizona": [r"\borizona\b"],
+    "Nova Crixás": [r"\bnova crixás\b", r"\bnova crixas\b"],
+    "Faina": [r"\bfaina\b"],
+    "Guarinos": [r"\bguarinos\b"],
+    "Bom Jardim de Goiás": [r"\bbom jardim de goiás\b", r"\bbom jardim de goias\b"],
+}
+UNIDADES = {
+    "Faixa Brasília": [r"\bfaixa brasília\b", r"\bfaixa brasilia\b"],
+    "Arco Magmático de Goiás": [r"\barco magmático de goiás\b", r"\barco magmatico de goias\b"],
+    "Maciço de Goiás": [r"\bmaciço de goiás\b", r"\bmacico de goias\b"],
+    "Complexo de Niquelândia": [r"\bcomplexo de niquelândia\b", r"\bcomplexo de niquelandia\b"],
+    "Complexo de Barro Alto": [r"\bcomplexo de barro alto\b"],
+    "Bacia do Paraná": [r"\bbacia do paraná\b", r"\bbacia do parana\b"],
+}
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def extrair_pdf(caminho, sha, limite_paginas=500):
+    """Retorna menções textuais. SHA invalida cache quando PDF muda no GitHub."""
+    url = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/{BRANCH}/{quote(caminho, safe='/')}"
+    resp = requests.get(url, timeout=90, headers={"User-Agent": "GeoGoiasDashboard"})
+    resp.raise_for_status()
+    if len(resp.content) > 25 * 1024 * 1024:
+        raise ValueError("PDF acima do limite de 25 MB desta versão")
+    rows = []
+    with fitz.open(stream=resp.content, filetype="pdf") as documento:
+        total = len(documento)
+        paginas_texto = 0
+        for ipagina in range(min(total, limite_paginas)):
+            texto = re.sub(r"\s+", " ", documento[ipagina].get_text("text")).strip()
+            if not texto:
+                continue
+            paginas_texto += 1
+            for classe, vocabulario in [("Mineral", MINERAIS), ("Município (menção)", MUNICIPIOS), ("Unidade geológica", UNIDADES)]:
+                for termo, padroes in vocabulario.items():
+                    ocorrencias = []
+                    for padrao in padroes:
+                        ocorrencias.extend(re.finditer(padrao, texto, flags=re.IGNORECASE))
+                    ocorrencias = sorted(ocorrencias, key=lambda m: m.start())
+                    if ocorrencias:
+                        m = ocorrencias[0]
+                        trecho = texto[max(0,m.start()-100):min(len(texto),m.end()+130)].strip()
+                        rows.append({"caminho": caminho, "classe": classe, "termo": termo,
+                                     "pagina_pdf": ipagina + 1, "mencoes_pagina": len(ocorrencias),
+                                     "trecho": trecho, "status": "Menção automática — validar"})
+    return rows, paginas_texto, total
+
+st.subheader("Extração automática de conteúdo dos PDFs")
+st.caption("Busca textual automática em PDFs do GitHub, com páginas e trechos de evidência. Menções não são comprovação de depósito, nem necessariamente área-objeto do estudo.")
+colauto, colmax = st.columns([2,1])
+with colauto:
+    auto_extracao = st.toggle("Analisar PDFs automaticamente", value=True, help="Na primeira execução o aplicativo precisa baixar e ler os PDFs. Resultados de arquivos inalterados são mantidos em cache por 24 horas.")
+with colmax:
+    limite_pdfs = st.number_input("Máximo de PDFs por execução", min_value=1, max_value=100, value=15, step=1)
+
+arquivos_pdf = [e for e in tree if e.get("type") == "blob" and e.get("path", "").lower().endswith(".pdf") and (e.get("size") or 0) <= 25 * 1024 * 1024]
+arquivos_pdf = sorted(arquivos_pdf, key=lambda e: e["path"])
+if auto_extracao:
+    alvos = arquivos_pdf[:int(limite_pdfs)]
+    candidatas, falhas, sem_texto = [], [], []
+    barra = st.progress(0, text="Analisando PDFs do repositório...")
+    for n, e in enumerate(alvos, start=1):
+        try:
+            rows, paginas_com_texto, total_paginas = extrair_pdf(e["path"], e.get("sha", ""))
+            candidatas.extend(rows)
+            if paginas_com_texto == 0:
+                sem_texto.append(e["path"])
+        except Exception as exc:
+            falhas.append((e["path"], str(exc)[:150]))
+        barra.progress(n / max(1,len(alvos)), text=f"PDFs analisados: {n}/{len(alvos)}")
+    barra.empty()
+    st.metric("PDFs analisados automaticamente", len(alvos) - len(falhas))
+    if len(arquivos_pdf) > len(alvos):
+        st.info(f"Foram analisados os primeiros {len(alvos)} de {len(arquivos_pdf)} PDFs. Aumente o limite para cobrir mais arquivos.")
+    if sem_texto:
+        st.warning(f"{len(sem_texto)} PDFs não apresentaram texto extraível. Podem exigir OCR; não foram inferidos resultados.")
+    if falhas:
+        st.warning(f"{len(falhas)} PDFs não puderam ser analisados.")
+        with st.expander("Ver arquivos com erro"):
+            st.dataframe(pd.DataFrame(falhas, columns=["Arquivo", "Motivo"]), hide_index=True)
+    if candidatas:
+        df_candidatos = pd.DataFrame(candidatas)
+        st.success(f"{len(df_candidatos)} combinações de termo e página encontradas, pendentes de validação.")
+        c_m, c_a = st.columns(2)
+        with c_m:
+            dm = df_candidatos[df_candidatos["classe"] == "Mineral"].drop_duplicates(["caminho", "termo"])
+            if not dm.empty:
+                cont = dm.groupby("termo").size().reset_index(name="documentos_com_mencao")
+                st.plotly_chart(px.bar(cont, x="termo", y="documentos_com_mencao", title="Minerais mencionados nos PDFs (não validados)"), use_container_width=True)
+        with c_a:
+            da = df_candidatos[df_candidatos["classe"] == "Município (menção)"].drop_duplicates(["caminho", "termo"])
+            if not da.empty:
+                cont = da.groupby("termo").size().reset_index(name="documentos_com_mencao")
+                st.plotly_chart(px.bar(cont, x="termo", y="documentos_com_mencao", title="Municípios mencionados nos PDFs (não validados)"), use_container_width=True)
+        filtro_classe = st.multiselect("Filtrar evidências", sorted(df_candidatos["classe"].unique()), default=sorted(df_candidatos["classe"].unique()))
+        st.dataframe(df_candidatos[df_candidatos["classe"].isin(filtro_classe)], hide_index=True, use_container_width=True)
+        st.download_button("Baixar candidatos e evidências (CSV)", data=df_candidatos.to_csv(index=False).encode("utf-8-sig"), file_name="candidatos_geogoias.csv", mime="text/csv")
+        st.caption("A coluna pagina_pdf é a página física do arquivo PDF; pode diferir da numeração impressa. O aplicativo não altera automaticamente o catalogo_mestre.csv no GitHub.")
+    else:
+        st.info("Nenhuma menção reconhecida. Verifique se os documentos contêm texto selecionável ou amplie os vocabulários de busca.")
+else:
+    st.info("Ative a extração para analisar os documentos. O inventário e o catálogo continuam disponíveis acima.")
+
 st.divider()
 st.caption("GeoGoiás · Registros de documentos não equivalem a depósitos, reservas, cobertura territorial ou produção mineral.")
